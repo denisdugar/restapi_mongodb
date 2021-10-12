@@ -41,12 +41,12 @@ def roommates_count(num):
 def all_max(max):
     return dumps(list(mongo.db.residents.find({'max_count_roommates' : int(max)})))
 
-@app.route('/num=<num>|max_count_roommates=<max_num>', methods=['PUT'])
+@app.route('/num=<num>|max_count_roommates=<max_num>', methods=['PATCH'])
 def change_max(num, max_num):
     mongo.db.residents.update_one({'num' : int(num)},{ "$set": { 'num': int(num) , 'max_count_roommates' : int(max_num) }})
     return dumps(mongo.db.residents.find_one({'num': int(num)}))
 
-@app.route('/num=<num>|roommates=<room>', methods=['PUT'])
+@app.route('/num=<num>|roommates=<room>', methods=['PATCH'])
 def change_roommates(num, room):
     j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
     if mongo.db.residents.find_one({'num': int(num)}) :
