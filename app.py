@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_pymongo import PyMongo
 from bson.json_util import dumps
+from flask import request
 import json
 
 from numpy import string_
@@ -9,62 +10,88 @@ app = Flask(__name__)
 app.config["MONGO_URI"] ="mongodb+srv://<login>:<password>@cluster0.k6yf1.mongodb.net/<database>?retryWrites=true&w=majority"
 mongo = PyMongo(app)
 
-@app.route('/', methods=['GET'])
-def home():
-    return dumps(list(mongo.db.residents.find()))
+@app.route('/count', methods=['GET'])
+def count():
+    return str(len(list(mongo.db.residents.find())))
 
-@app.route('/num=<num>', methods=['GET'])
-def room(num):
-    return  dumps(mongo.db.residents.find_one({'num': int(num)}))
+@app.route('/rooms', methods=['GET'])
+def home():
+    if request.args.get('num'):
+        if dumps(list(mongo.db.residents.find({'num': int(request.args.get('num'))}))):
+            return  dumps(list(mongo.db.residents.find({'num': int(request.args.get('num'))})))
+        else:
+            return 'There is no room', 500
+    if request.args.get('max'):
+        if dumps(list(mongo.db.residents.find({'max_count_roommates' : int(request.args.get('max'))}))):
+            return dumps(list(mongo.db.residents.find({'max_count_roommates' : int(request.args.get('max'))})))
+        else:
+            return 'There is no room', 500
+    else:
+        return dumps(list(mongo.db.residents.find()))
 
 @app.route('/num=<num>/id', methods=['GET'])
 def id(num):
-    j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
-    return j["_id"]
-
-@app.route('/num=<num>/max_roommates', methods=['GET'])
-def max_roommates_count(num):
-    j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
-    return str(j["max_count_roommates"])
+    if dumps(mongo.db.residents.find_one({'num': int(num)})):
+        j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
+        return j["_id"]
+    else:
+        return 'There is no room', 500
 
 @app.route('/num=<num>/roommates', methods=['GET'])
 def roommates(num):
-    j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
-    return dumps(list(j["roommates"]))
+    if dumps(mongo.db.residents.find_one({'num': int(num)})):
+        j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
+        return dumps(list(j["roommates"]))
+    else:
+        return 'There is no room', 500
+
+@app.route('/num=<num>/max_count_roommates', methods=['GET'])
+def roommates_max(num):
+    if dumps(mongo.db.residents.find_one({'num': int(num)})):
+        j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
+        return str(j["max_count_roommates"])
+    else:
+        return 'There is no room', 500
 
 @app.route('/num=<num>/roommates_count', methods=['GET'])
 def roommates_count(num):
-    j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
-    return str(len(j["roommates"]))
+    if json.loads(dumps(mongo.db.residents.find_one({'num': int(num)}))):
+        j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
+        return str(len(j["roommates"]))
+    else:
+        return 'There is no room', 500  
 
-@app.route('/max_count_roommates=<max>', methods=['GET'])
-def all_max(max):
-    return dumps(list(mongo.db.residents.find({'max_count_roommates' : int(max)})))
-
-@app.route('/num=<num>|max_count_roommates=<max_num>', methods=['PATCH'])
-def change_max(num, max_num):
-    mongo.db.residents.update_one({'num' : int(num)},{ "$set": { 'num': int(num) , 'max_count_roommates' : int(max_num) }})
-    return dumps(mongo.db.residents.find_one({'num': int(num)}))
-
-@app.route('/num=<num>|roommates=<room>', methods=['PATCH'])
-def change_roommates(num, room):
-    j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
-    if mongo.db.residents.find_one({'num': int(num)}) :
-        if (j["max_count_roommates"] < len(room.split())):
-            return 'A lot of residents'
-        else : 
-            mongo.db.residents.update_one({'num' : int(num)},{ "$set": { 'num': int(num) , 'roommates' : room.split() }})
+@app.route('/num=<num>', methods=['PATCH'])
+def change(num):
+    if request.args.get('max'):
+        j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
+        if int(request.args.get('max'))>=len(j["roommates"]):
+            mongo.db.residents.update_one({'num' : int(num)},{ "$set": { 'num': int(num) , 'max_count_roommates' : int(request.args.get('max')) }})
             return dumps(mongo.db.residents.find_one({'num': int(num)}))
-    else :
-        return 'This room does not exist'
+        else:
+            return 'Small max_roommates_count', 500
+    if request.args.get('roommates'):
+        j = json.loads(dumps(mongo.db.residents.find_one({'num': int(num)})))
+        if mongo.db.residents.find_one({'num': int(num)}) :
+            if (j["max_count_roommates"] < len((request.args.get('roommates')).split())):
+                return 'A lot of residents', 500
+            else : 
+                mongo.db.residents.update_one({'num' : int(num)},{ "$set": { 'num': int(num) , 'roommates' : (request.args.get('roommates')).split() }})
+                return dumps(mongo.db.residents.find_one({'num': int(num)}))
+        else :
+            return 'This room does not exist'
 
-@app.route('/num=<num>|max_count_roommates=<max>|roommmates=<room>', methods=['POST'])
-def add_room(num, max, room):
-    if mongo.db.residents.find_one({'num' : int(num)}):
-        return 'This id alredy exist'
-    else: 
-        x = mongo.db.residents.insert_one({'num' : int(num), "max_count_roommates" : int(max), "roommates" : room.split()})
-        return dumps(mongo.db.residents.find_one({'num': int(num)}))
+@app.route('/create_room', methods=['POST'])
+def add_room():
+    if request.args.get('num'):
+        if mongo.db.residents.find_one({'num' : int(request.args.get('num'))}):
+            return 'This id alredy exist', 500
+        else: 
+            mongo.db.residents.insert_one({'num' : int(request.args.get('num')), "max_count_roommates" : int(request.args.get('max')), "roommates" : (request.args.get('roommates')).split()})
+            return dumps(mongo.db.residents.find_one({'num': int(request.args.get('num'))}))
+    else:
+        mongo.db.residents.insert_one({'num' : int(len(list(mongo.db.residents.find())))+1, "max_count_roommates" : int(request.args.get('max')), "roommates" : (request.args.get('roommates')).split()})
+        return dumps(mongo.db.residents.find_one({'num': int(len(list(mongo.db.residents.find())))}))
 
 @app.route('/num=<num>', methods=['DELETE'])
 def delete(num):
@@ -72,4 +99,4 @@ def delete(num):
       mongo.db.residents.delete_one({'num': int(num)})
       return 'DELETED'
     else :
-        return 'This num does not exist'
+        return 'This num does not exist', 500
