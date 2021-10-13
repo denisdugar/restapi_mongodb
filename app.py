@@ -7,7 +7,7 @@ import json
 from numpy import string_
 
 app = Flask(__name__)
-app.config["MONGO_URI"] ="mongodb+srv://denis:254693178521@cluster0.k6yf1.mongodb.net/Hotel?retryWrites=true&w=majority"
+app.config["MONGO_URI"] ="mongodb+srv://<login>:<password>@cluster0.k6yf1.mongodb.net/<database>?retryWrites=true&w=majority"
 mongo = PyMongo(app)
 
 ########## COUNT OF OBJECTS ############
